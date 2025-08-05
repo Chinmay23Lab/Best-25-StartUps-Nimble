@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Startup Explorer 2025</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: "Warm Neutrals" - A calm and professional palette using shades of beige, slate, and a subtle navy accent for focus. -->
+    <!-- Application Structure Plan: A single-column, scrollable dashboard. Key features include a main header, a filter/sort control bar, and a dynamic list of startup 'cards'. Clicking a card expands an inline detail section directly below it for focused exploration, eliminating the need for a separate detail panel and reducing vertical scrolling for details. Below this, a visualization section with two charts (Donut for country distribution, Bar for theme distribution) provides a high-level summary of the report's key trends. This interactive, non-linear design was chosen over a static page to enhance user engagement, discoverability of trends, and overall usability, with inline details improving context and reducing navigation effort. -->
+    <!-- Visualization & Content Choices: 1. Startup List/Inline Detail View: (Report Info: Full startup profiles) -> (Goal: Inform, Organize, Explore) -> (Viz: Interactive HTML cards with collapsible inline details) -> (Interaction: Click to toggle details, filter/sort list) -> (Justification: Manages information density, keeps context with the list item, allows user-driven exploration without page jumps) -> (Method: Vanilla JS DOM manipulation, Tailwind for collapse). 2. Country Distribution: (Report Info: Startup countries) -> (Goal: Compare) -> (Viz: Donut Chart) -> (Interaction: Hover tooltips) -> (Justification: Clearly shows parts-of-a-whole for geographic spread) -> (Library: Chart.js). 3. Innovation Themes: (Report Info: Categorized core innovations) -> (Goal: Analyze, Compare) -> (Viz: Horizontal Bar Chart) -> (Interaction: Hover tooltips) -> (Justification: Best for comparing counts across distinct categories, highlighting key innovation trends) -> (Library: Chart.js). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF7;
+            color: #334155;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 400px;
+            }
+        }
+        .startup-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .startup-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+        }
+        .active-filter {
+            background-color: #1E3A8A;
+            color: #FFFFFF;
+        }
+        .detail-view-enter {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .startup-details-content {
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.5s ease-out, padding 0.5s ease-out;
+        }
+        .startup-details-content.open {
+            max-height: 1000px; /* Large enough to accommodate content */
+            padding-top: 16px; /* py-4 */
+            padding-bottom: 16px; /* py-4 */
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-800 mb-2">Accelerating Tomorrow</h1>
+            <p class="text-lg md:text-xl text-slate-600">An Interactive Outlook on 2025's Top 25 Innovative Startups</p>
+        </header>
+
+        <main>
+            <div id="controls" class="mb-8 p-4 bg-white/80 backdrop-blur-sm rounded-xl shadow-sm sticky top-4 z-10">
+                <div class="grid grid-cols-1 md:grid-cols-1 gap-4 items-center">
+                    <div>
+                        <label class="font-semibold text-slate-700 text-sm mb-2 block">Filter by Innovation Theme</label>
+                        <div id="theme-filters" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    <!-- Removed Sort by section -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1">
+                <div id="startup-list-container" class="col-span-1">
+                    <div class="flex justify-between items-center mb-3 px-2">
+                         <h2 class="text-xl font-bold text-slate-800">Innovators</h2>
+                         <p id="startup-count" class="text-sm font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full"></p>
+                    </div>
+                    <div id="startup-list" class="space-y-3 max-h-[80vh] overflow-y-auto pr-2">
+                    </div>
+                </div>
+            </div>
+
+            <section id="visualizations" class="mt-16">
+                <h2 class="text-2xl md:text-3xl font-bold text-slate-800 text-center mb-4">Innovation at a Glance</h2>
+                <p class="text-center text-slate-600 max-w-3xl mx-auto mb-12">The following visualizations summarize the key trends from the report, showing the geographic and thematic distribution of 2025's leading innovators.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+                    <div class="p-6 bg-white rounded-xl shadow-md">
+                        <h3 class="text-lg font-semibold text-center mb-4 text-slate-700">Startup Distribution by Country</h3>
+                        <div class="chart-container">
+                            <canvas id="country-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="p-6 bg-white rounded-xl shadow-md">
+                        <h3 class="text-lg font-semibold text-center mb-4 text-slate-700">Top Innovation Themes</h3>
+                        <div class="chart-container">
+                            <canvas id="theme-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-16 pt-8 border-t border-slate-200">
+            <h3 class="text-xl font-semibold text-slate-800">Charting the Future of Innovation</h3>
+            <p class="mt-2 max-w-4xl mx-auto text-slate-600">
+                The startups highlighted here are not just adapting to the future—they are actively building it. Their rapid ascent is fueled by groundbreaking ideas, but sustained growth depends on robust technological foundations. The journey from innovative concept to global impact is often accelerated by strategic alliances that provide the necessary technical backbone and specialized guidance.
+            </p>
+            <p class="mt-4 text-sm text-slate-500">
+                To explore how a dedicated technology partner can help accelerate your groundbreaking work, visit <a href="http://www.nimbletechnologies.biz" target="_blank" class="font-semibold text-blue-800 hover:underline">www.nimbletechnologies.biz</a>.
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        const startupsData = [
+            {
+                id: 1,
+                rank: 1,
+                name: "Perplexity AI",
+                country: "USA",
+                theme: "AI & Automation",
+                innovation: "AI search engine interpreting queries like a chatbot, providing sourced answers.",
+                growth: "9,500% 5-year search growth, 153M monthly visitors.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Perplexity AI"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${1}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"9,500% 5-year search growth, 153M monthly visitors."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Perplexity AI has developed a free AI search engine that functions as a conversational chatbot, similar to ChatGPT. It synthesizes accurate answers from online sources by leveraging a combination of various large language models (LLMs) including OpenAI's GPT-4, Anthropic's Claude 3, and Google DeepMind's Gemini. The company has also expanded into the business-to-business (B2B) sector with its Enterprise Pro product, offering features like user management, single sign-on (SSO), SOC2 certification, and enhanced data privacy and security.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Perplexity AI demonstrates explosive growth, marked by a 9,500% 5-year search growth and attracting 153 million monthly visitors. In April 2024, the company achieved unicorn status with a $1.04 billion valuation, raising $62.7 million. By March 2025, it expressed interest in raising $1 billion at an $18 billion valuation. This rapid ascent underscores a significant market demand for conversational AI in enterprise settings, moving beyond basic search to intelligent, synthesized information retrieval.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 2,
+                rank: 2,
+                name: "ElevenLabs",
+                country: "UK",
+                theme: "AI & Automation",
+                innovation: "AI-powered tools for translating spoken content and generating realistic voices.",
+                growth: "£145M raised in Jan 2025, joined Disney Accelerator.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"ElevenLabs"}</h3>
+                                <p class="text-slate-500">${"UK"} • Rank #${2}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"£145M raised in Jan 2025, joined Disney Accelerator."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">ElevenLabs develops advanced AI-powered tools for translating spoken content across languages and generating highly realistic human-like voices from text. Their technology has wide-ranging applications in media, gaming, and enterprise software, aiming to pioneer the future of Audio AI. The company emphasizes foundational principles like approaching problems without bias, striving for excellence, and taking ownership of outcomes while being mindful of impact.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">ElevenLabs has demonstrated significant financial traction, raising £224 million across four funding rounds, with their latest being £145 million in January 2025. Notable investors include Andreessen Horowitz, Sequoia Capital, Salesforce Ventures, and Deutsche Telekom. In 2024, the company joined the prestigious Disney Accelerator and acquired voice technology firm Omnivore, indicating strategic expansion and validation from industry giants. This positions ElevenLabs as a leader in the burgeoning AI audio market.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 3,
+                rank: 3,
+                name: "Runway ML",
+                country: "USA",
+                theme: "AI & Automation",
+                innovation: "Foundational AI models for multimodal content creation (video, image, multimedia).",
+                growth: "Partnership with Lionsgate (Sept 2024), Gen-4 narrative capabilities showcased.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Runway ML"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${3}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Partnership with Lionsgate (Sept 2024), Gen-4 narrative capabilities showcased."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Runway ML is at the forefront of generative AI for creative applications, building foundational AI research models and tools to create multimodal simulators of the world. Their core offering allows users to generate videos, images, and multimedia content through simple conversational prompts. Key products include Gen-1 (video-to-video generative AI) and Gen-2 (text-to-video and image-to-video multimodal AI), and they co-created Stable Diffusion.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Runway ML has demonstrated significant traction through strategic partnerships and continuous innovation. They introduced "Runway Aleph" in July 2025 and have partnered with major entertainment industry players like Tribeca Festival (May 2024) and Lionsgate (September 2024). The company actively showcases its Gen-4 narrative capabilities through short films and music videos, illustrating the practical applications of its technology. Top creatives are already leveraging Runway for high-profile projects, including event visuals for Madonna's Celebration Tour and A$AP Rocky music videos. Runway Studios, their entertainment and production arm, further supports AI-driven creativity through initiatives like the AI Film Festival and Telescope Magazine, indicating a broad strategic vision to influence the creative sector. The rapid evolution of their models (e.g., Gen-1, Gen-2, Gen-4, Aleph) highlights their commitment to pushing the boundaries of generative AI.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 4,
+                rank: 4,
+                name: "Protect AI",
+                country: "USA",
+                theme: "AI & Security",
+                innovation: "Comprehensive AI security platform from model selection to runtime.",
+                growth: "Acquired by Palo Alto Networks, 4.84M+ model versions scanned.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Protect AI"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${4}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Acquired by Palo Alto Networks, 4.84M+ model versions scanned."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Protect AI offers a comprehensive, end-to-end AI security solution designed to safeguard AI applications throughout their lifecycle. Their unified platform comprises three core products: Guardian (for AI model security), Recon (for scalable AI red teaming), and Layer (for runtime security). This innovative approach shifts the paradigm from reactive security measures to a proactive "Secure by Design" methodology, addressing the evolving and unique threats inherent in artificial intelligence systems.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Protect AI has demonstrated significant market validation, notably through its acquisition by Palo Alto Networks, described as a "Prisma AIRS Power Play!". This acquisition signifies strong industry recognition and integration into a leading cybersecurity ecosystem. The company boasts impressive metrics, having scanned over 4.84 million model versions and submitted 2,520 Common Vulnerabilities and Exposures (CVE) records. Its strong community engagement includes over 8,000 MLSecOps community members and over 17,000 security researchers on the huntr platform, fueling its "unparalleled access to threat research". Protect AI has also received numerous accolades, including the Fortune Cyber 60 Award 2023 and the Product 50 Awards Best Product Leader 2025, underscoring its leadership in the AI security domain. The increasing adoption of AI across enterprises makes robust AI security solutions a critical and rapidly expanding market.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 5,
+                rank: 5,
+                name: "Livekit",
+                country: "USA",
+                theme: "AI & Automation",
+                innovation: "All-in-one Voice AI platform for building, deploying, and scaling real-time agents.",
+                growth: "Powers ChatGPT's Advanced Voice Mode for millions of users daily.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Livekit"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${5}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Powers ChatGPT's Advanced Voice Mode for millions of users daily."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">LiveKit offers an all-in-one Voice AI platform designed for building, deploying, and scaling real-time agents. Its core innovation lies in integrating various Voice AI tools and research with ultra-low-latency edge infrastructure through a simple yet powerful API. This platform supports millions of concurrent calls, featuring automatic turn detection and interruption handling, and notably powers ChatGPT’s Advanced Voice Mode for millions of users daily.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">LiveKit has achieved significant traction, being adopted by a wide range of innovators from startups to industry giants, including OpenAI, Speak AI, xAI, Character AI, and Hello Patient. Customer testimonials highlight its reliability, ease of use, flexible architecture, and ability to accelerate time to production. The platform's robust infrastructure boasts 99.99% uptime, 100ms global latency, and the capacity to handle 3 billion calls annually, along with GDPR, HIPAA, and SOC 2 Type 2 compliance. This strong performance and compliance make it highly attractive for critical real-time applications. The open-source nature of LiveKit, combined with its enterprise-grade features, positions it for broad adoption across Voice AI, Robotics, and Livestreaming sectors, indicating substantial growth potential.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 6,
+                rank: 6,
+                name: "Mujin",
+                country: "USA",
+                theme: "AI & Automation",
+                innovation: "Robotic controller using AI for diverse industrial applications.",
+                growth: "Simplified inbound automation for a top retailer.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Mujin"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${6}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Simplified inbound automation for a top retailer."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Mujin develops the MujinOS platform, a revolutionary robotic controller that enables industrial robots to perform diverse applications with perception, awareness, and autonomous decision-making. This innovation eliminates the need for custom development or extensive training algorithms, simplifying automation for faster startup and seamless integration without constant human intervention. The MujinController is central to this, allowing robots to adapt to changing environments in real-time.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Mujin has demonstrated significant traction through successful implementations with major clients. Case studies highlight how a packaging integrator achieved simplified robotics system delivery and how a top retailer streamlined inbound automation using Mujin's intelligent robotics. A notable achievement includes on-the-fly mixed-SKU palletizing at Trusco Nakayama’s flagship distribution center, showcasing the system's ability to handle complex, dynamic tasks. The company's growth potential is substantial due to the "Limitless Applications" of MujinOS, which supports a wide range of industrial tasks such as palletizing, depalletizing, piece picking, bin picking, robotic case picking, and unloading (including their TruckBot for high-speed container unloading). By simplifying and accelerating robotic deployment, Mujin addresses a critical pain point in manufacturing and logistics, positioning itself for widespread adoption.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 7,
+                rank: 7,
+                name: "Monarch Tractor",
+                country: "USA",
+                theme: "Sustainability",
+                innovation: "100% electric, driver-optional, data-driven autonomous tractor.",
+                growth: "California subsidy allows 67% off retail price; featured in WSJ.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Monarch Tractor"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${7}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"California subsidy allows 67% off retail price; featured in WSJ."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Monarch Tractor has developed the world's first 100% electric, driver-optional, and data-driven autonomous tractor, the MK-V. This innovation aims to revolutionize farming by simultaneously enhancing farm profitability and promoting planet sustainability. It represents a new era of agriculture, integrating electric power with advanced autonomous capabilities and comprehensive data insights.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Monarch Tractor has gained significant traction, notably through a California subsidy allowing farmers to acquire the MK-V at roughly 67% off retail price, a program highlighted in July 2025 news. The company was featured in The Wall Street Journal's "The Rise of Autonomous Farms" in July 2025 and recognized as a Top 50 AgTech Innovator by SVG Ventures | THRIVE in June 2025. Partnerships, such as one with Scout in May 2025 to bring a digital implement to market, further underscore its expanding ecosystem. Customer testimonials from vineyards, orchards, and dairies praise its power, performance, automation, and fleet management capabilities. The MK-V addresses critical agricultural challenges like labor shortages, climate change, and food safety, offering substantial savings (e.g., 54 metric tons of CO₂e and 2,100 gallons of diesel annually per tractor) and increased labor productivity through fleet management. Its applicability across diverse agricultural sectors, coupled with flexible financing and significant subsidies, positions it for substantial growth.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 8,
+                rank: 8,
+                name: "Electric Hydrogen",
+                country: "USA",
+                theme: "Sustainability",
+                innovation: "HYPRPlant for ultra-low-cost electrolysis to produce clean hydrogen.",
+                growth: "1.2 GW/year electrolyzer stack manufacturing capacity in U.S.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Electric Hydrogen"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${8}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"1.2 GW/year electrolyzer stack manufacturing capacity in U.S."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Electric Hydrogen's core innovation is the HYPRPlant, which utilizes the world's most powerful advanced Proton Exchange Membrane (PEM) stack to achieve ultra-low-cost electrolysis. This breakthrough aims to deliver up to 60% lower total installed costs for clean hydrogen projects, making green hydrogen economically viable today. The HYPRPlant is a fully integrated, pre-engineered solution that ships ready for assembly, minimizing on-site integration risks.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Electric Hydrogen has demonstrated significant traction through key partnerships and validations. In July 2025, DNV, an independent energy expert, completed a comprehensive technical due diligence on their HYPRPlant solution. In May 2025, the company selected The Weitz Company as its EPC partner for installing a 100 MW HYPRPlant at Infinium’s Roadrunner project in Texas, with Infinium selecting Electric Hydrogen’s solution for its large-scale eFuels facility. The company operates a state-of-the-art U.S. manufacturing facility in Massachusetts with a capacity of 1.2 GW per year for electrolyzer stacks, positioning it to meet the rapidly growing demand for cost-effective water electrolysis. Its technology is applicable across critical industries such as refineries, eFuels (sustainable aviation fuel, e-methanol), green steel production, and ammonia, indicating a vast market potential for industrial decarbonization.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 9,
+                rank: 9,
+                name: "Hume AI",
+                country: "USA",
+                theme: "AI & Automation",
+                innovation: "Voice-based LLM for realistic, emotionally intelligent AI voice generation.",
+                growth: "EVI 3 (speech-to-speech foundation model) announced May 2025.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Hume AI"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${9}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"EVI 3 (speech-to-speech foundation model) announced May 2025."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Hume AI's core innovation is the Octave (Omni-capable text and voice engine), which stands as the world's most realistic voice AI, operating in real-time. Unlike traditional Text-to-Speech (TTS) models, Octave is a voice-based Large Language Model (LLM) that comprehends the contextual meaning of words. This allows it to predict and instruct emotions, cadence, and other speaking styles, giving users unprecedented control over AI-generated speech. They also developed EVI 3, a speech-to-speech foundation model for enhanced expressiveness and emotional understanding.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Hume AI has demonstrated recent traction with the announcement of EVI 3 as the world’s most realistic and instructible speech-to-speech foundation model, bringing more expressiveness, realism, and emotional understanding to voice AI. The Octave TTS model was made available to content creators and developers in February 2025, indicating a readiness for broader market adoption. The company's focus on generating expressive AI voices for diverse content types such as podcasts, voiceovers, and audiobooks, combined with the availability of a streaming API, suggests significant potential for integration into a wide range of applications. This positions Hume AI to revolutionize human-computer interaction and content creation by enabling more natural and emotionally nuanced AI communication.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 10,
+                rank: 10,
+                name: "Axiom Space",
+                country: "USA",
+                theme: "Space Tech",
+                innovation: "Redefining human spaceflight; building the first commercial space station.",
+                growth: "Ax-4 mission (June 2025) with 60+ research activities from 31 countries.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Axiom Space"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${10}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Ax-4 mission (June 2025) with 60+ research activities from 31 countries."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Axiom Space's core innovation lies in redefining human access to low-Earth orbit (LEO) and elevating national space programs globally. They are actively building the world's first commercial space station and enabling government-sponsored human spaceflight missions to the International Space Station (ISS). This includes facilitating the first government-sponsored flights for nations like India, Poland, and Hungary in over 40 years, marking a significant expansion of international space participation.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Axiom Space achieved a major milestone with the successful launch and splashdown of Axiom Mission 4 (Ax-4) between June and July 2025. This 18-day mission included over 60 research activities and 23 outreach events from 31 countries, making it the most research-intensive Axiom Space mission to date. This highlights the growing demand for LEO access for scientific, technological, and educational purposes. Axiom Space's focus on microgravity research (e.g., supporting astronauts with diabetes, developing edge computing for crew readiness, studying cancer in LEO) and educational outreach (e.g., ISS HAM Radio, Limitless Space Institute Student Experiments) indicates a broad and impactful growth trajectory. Their work on the commercial space station positions them as a foundational player in the future space economy.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 11,
+                rank: 11,
+                name: "Stoke Space",
+                country: "USA",
+                theme: "Space Tech",
+                innovation: "100% reusable Nova rocket for 20x reduced cost to orbit.",
+                growth: "Selected for U.S. Space Force’s NSSL program (March 2025).",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Stoke Space"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${11}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Selected for U.S. Space Force’s NSSL program (March 2025)."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Stoke Space is committed to developing 100% reusable rockets, with the Nova rocket as its flagship. This innovation aims to radically reduce the cost of access to orbit by a factor of 20. Their reusable upper-stage vehicle is designed to provide on-demand access to any orbit at any time, enabling dynamic space operations such as satellite capture, repositioning, long-duration missions, asset return, and space cargo logistics.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Stoke Space has demonstrated significant recent traction through a series of successful technical milestones. These include a vertical hotfire of their Zenith engine (full-flow staged combustion) in December 2024, a reentry heat shield demonstration at flight heating conditions in February 2024, and a flight demonstration of a full-scale reusable upper stage prototype in September 2023. In April 2025, they achieved an Andromeda engine hotfire over 100% Power Level. A major validation of their potential came on March 27, 2025, when Stoke Space was selected to participate in the U.S. Space Force’s National Security Space Launch (NSSL) Phase 3 Lane 1 program, aimed at expanding capacity for national security payloads. Their rapid reactivation of Space Launch Complex 14 at Cape Canaveral in less than a year further underscores their operational efficiency. The company aims to slash atmospheric impact by 98% compared to current rockets, aligning with growing sustainability demands and fostering a booming space economy. Their vertically integrated operations, allowing for rapid design, manufacturing, and testing, position them for swift growth in the space industry.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 12,
+                rank: 12,
+                name: "Terabase Energy",
+                country: "USA",
+                theme: "Sustainability",
+                innovation: "Digital and automation platform for utility-scale solar plant deployment.",
+                growth: "$130M Series C funding; 3 TW simulated across 30,000+ projects.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Terabase Energy"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${12}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"$130M Series C funding; 3 TW simulated across 30,000+ projects."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Terabase Energy's core innovation is an interconnected digital and automation platform designed to significantly reduce costs and enhance scalability in the deployment of utility-scale solar power plants. A pivotal component is Terafab, described as the world's first automated, robotics-assisted, digital field factory for solar power plant construction. This approach aims to improve efficiency through high throughput, 24/7 operation, and modularity, leading to a 2x increase in labor productivity.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Terabase Energy recently secured substantial financial backing with $130 million in Series C funding from SoftBank Vision Fund 2, highlighting strong investor confidence. The company's software products demonstrate significant adoption: PlantPredict has simulated over 3 terawatts (TW) across more than 30,000 projects for solar energy modeling, and Construct, their construction management software, supports 16 gigawatts (GW) of projects. Additionally, their SCADA & Plant Controls solutions support 10 GW of projects. This widespread adoption indicates a clear market need for their solutions. Terabase Energy aims to unlock the scalability of solar by addressing resource constraints through cloud-based digitization and construction automation, positioning itself as a key enabler for rapid, large-scale solar deployment globally.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 13,
+                rank: 13,
+                name: "Lovable AI",
+                country: "USA",
+                theme: "Digital Transformation",
+                innovation: "AI platform for building full-stack websites and apps via natural language.",
+                growth: "Achieved $100M ARR in 8 months; 10M+ projects built.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Lovable AI"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${13}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Achieved $100M ARR in 8 months; 10M+ projects built."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Lovable AI is an AI-powered platform that enables users to build full-stack websites and web applications using natural language prompts, effectively allowing "vibe coding" without traditional coding skills. It aims to democratize software creation by translating ideas and visions into functional applications. The platform's "Lovable Agent" acts as a virtual developer, capable of browsing websites, fetching content, generating/editing images, and updating code across multiple files.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Lovable AI has demonstrated explosive growth, reaching $100 million in Annual Recurring Revenue (ARR) in just eight months since its first $1 million, making it one of the fastest-growing startups globally. The platform has seen over 10 million projects built, with 100,000 new projects created daily. This rapid adoption is fueled by its ability to significantly reduce development time and cost, appealing to both non-technical founders and developers seeking to accelerate their workflows. Strategic updates like "Agent Mode" (beta) and "Visual Edits" enhance its capabilities and user experience. The company's focus on empowering the 99% of the population without code literacy to build software positions it for massive market disruption in the software development industry.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 14,
+                rank: 14,
+                name: "Appsmith",
+                country: "USA",
+                theme: "Digital Transformation",
+                innovation: "Open-source low-code platform for custom AI-powered apps.",
+                growth: "37,632 GitHub stars; GSK built app to patch 3,500 servers in one sprint.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Appsmith"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${14}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"37,632 GitHub stars; GSK built app to patch 3,500 servers in one sprint."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Appsmith is an open-source, low-code application platform designed to accelerate the delivery of custom AI-powered apps and agents. Its core innovation lies in combining low-code development with a "developer-first" approach, offering full transparency and code-level control. Users can connect to various Large Language Models (LLMs), applications, databases, and APIs. The platform allows users to generate code from natural language prompts and then customize it with JavaScript, providing a centralized Integrated Development Environment (IDE) for managing logic. It also supports Git integration for version control and collaborative development.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Appsmith has garnered significant traction, boasting 37,632 stars on GitHub, indicating strong developer community engagement. The platform is trusted by companies ranging from startups to large enterprises, demonstrating its versatility. Notable examples include F22 Labs saving $1,200/month by developing custom extensions, GSK building an app to patch 3,500 Linux servers in one sprint, and Block processing new customer applications 50% faster. HeyJobs also increased feature addition speed by 90%. Appsmith is recognized as a leader in digital process automation and low-code development, with high ratings on G2 (4.7/5), ProductHunt (4.9/5), and Capterra (5/5). Its open-source nature under the Apache 2.0 license, combined with enterprise-grade security features (SAML/OIDC SSO, role-based access, SOC 2 Type II compliance), positions it for substantial growth in the rapidly expanding market for custom internal tools and AI-powered enterprise applications.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 15,
+                rank: 15,
+                name: "Seek AI",
+                country: "USA",
+                theme: "Digital Transformation",
+                innovation: "Agentic AI platform for natural language data querying and analysis.",
+                growth: "Acquired by IBM; enables querying complex datasets in a fraction of time.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Seek AI"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${15}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Acquired by IBM; enables querying complex datasets in a fraction of time."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Seek AI's core innovation is an "agentic AI platform" that enables both non-technical and technical users to interact with data using natural language queries. It leverages deep learning to develop unique semantic models for companies and employs machine learning techniques (including online learning and reinforcement learning) to continuously improve search queries. The platform combines state-of-the-art AI code generation with a workflow product to solve customer pain points, embodying the "Software 3.0" paradigm.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Seek AI has demonstrated significant recent traction, highlighted by its acquisition by IBM. The company has received strong testimonials from various CEOs and directors, including Battlefin (accessing 2,400+ datasets), Vicci Eyewear (powering data strategy for online retail growth), SmarterX (querying complex datasets in a fraction of time), and PostAds (delivering deeper insights beyond traditional templates). A Fortune 500 CPG company chose Seek for its ability to extract value from Snowflake and third-party data, while a leading FDIC-Insured Bank selected it to optimize data analyst time. Recent updates include integration with DeepSeek-R1 (February 2025) and selection by Storelli to strengthen data-driven growth (May 2025). The acquisition by IBM signifies substantial growth potential, positioning Seek AI to modernize data stacks and automate workflows for businesses of all sizes across CPG, Retail, Finance, and Healthcare.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 16,
+                rank: 16,
+                name: "ThatDot",
+                country: "USA",
+                theme: "AI & Security",
+                innovation: "Streaming Graph for real-time complex pattern detection in massive data streams.",
+                growth: "Developed with DARPA; funded by CrowdStrike; processes 1M+ events/sec.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"ThatDot"}</h3>
+                                <p class="text-slate-500">${"USA"} • Rank #${16}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Developed with DARPA; funded by CrowdStrike; processes 1M+ events/sec."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">ThatDot's core innovation is the Quine Streaming Graph, a real-time streaming graph engine that provides immediate visibility into valuable patterns across massive data streams. This technology enables the ingestion and analysis of internet-scale data without dropping data or compromising depth. It is designed to uncover deep threats by identifying complex attack patterns spanning billions of events over months and to respond in milliseconds, triggering actions the moment a full threat pattern emerges.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">ThatDot has demonstrated significant traction through collaborations with notable organizations including DARPA, In-Q-Tel, CrowdStrike, the US Air Force, and the US Navy. The Quine Streaming Graph was developed with DARPA and funded by CrowdStrike, underscoring its strategic importance in defense and cybersecurity sectors. The technology can process data at sustained rates beyond 1 million events per second per cluster, handling unlimited graph sizes and ensuring no data loss even with hardware failures. Its ability to identify complex, multi-hop patterns (10, 20, 100+ hops) and provide millisecond-latency insights makes it a critical tool for cybersecurity, banking, and defense, indicating substantial growth potential in high-stakes data environments.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 17,
+                rank: 17,
+                name: "Quantum Dice",
+                country: "UK",
+                theme: "AI & Security",
+                innovation: "Quantum random number generators leveraging quantum optics.",
+                growth: "Global distribution partnership for QRNG chip products (June 2025).",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Quantum Dice"}</h3>
+                                <p class="text-slate-500">${"UK"} • Rank #${17}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Global distribution partnership for QRNG chip products (June 2025)."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Quantum Dice's core innovation lies in harnessing the quantum properties of light to generate verifiably true randomness. They have developed a range of products and solutions, including Quantum Random Number Generator (QRNG) chip products, that leverage unique quantum systems and their patented DISC™ protocol. This technology provides verifiably secure random numbers essential for robust encryption and enhances stochastic methods and statistical simulations in various applications.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Quantum Dice has demonstrated significant recent traction through strategic partnerships and program launches. In June 2025, they announced a global distribution partnership with Astute Group for their QRNG chip products. Earlier in June 2025, they launched an Authorized Partner Programme to expand access to verifiable quantum randomness. Their solutions are already deployed in the UK and internationally, and the company has been featured in prominent publications like Forbes 30 Under 30 and Startups 100. Quantum Dice is committed to tackling major computational challenges, particularly in cybersecurity (secure encryption) and stochastic computing (enhancing simulations for finance, biotech, AI/ML). The increasing global focus on post-quantum cryptography and the need for truly unpredictable randomness position Quantum Dice for substantial growth.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 18,
+                rank: 18,
+                name: "cheqd",
+                country: "UK",
+                theme: "Digital Transformation",
+                innovation: "Payment and trust infrastructure for verifiable digital credentials and AI.",
+                growth: "Partnership with Artificial Superintelligence Alliance (July 2025).",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"cheqd"}</h3>
+                                <p class="text-slate-500">${"UK"} • Rank #${18}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Partnership with Artificial Superintelligence Alliance (July 2025)."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">cheqd provides a payment and trust infrastructure for verifiable digital credentials and AI. Its core innovation lies in supercharging credential ecosystems and agentic economies by offering a trust and commercial layer. This technology pioneers privacy-preserving payments for trusted data, incentivizing data release from silos and enabling new user experiences and personalized AI. cheqd supports multiple credential formats (e.g., SD-JWT, W3C VCDM, AnonCreds) and underpins identity frameworks like eIDAS 2.0 through its industry-leading Trust Registries.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">cheqd has demonstrated significant recent traction through strategic partnerships. In July 2025, they partnered with Artificial Superintelligence Alliance (ASI) to adopt cheqd’s Trust infrastructure for AI Agents Ecosystems. In June 2025, a partnership with VERA was announced to launch verified digital identity and communication across Africa, integrating cheqd’s decentralized identity with VERA’s encrypted B2B messaging. They also partnered with AK Esports in May 2025 to bring verifiable driver ID to global racing competitions. The company hosted a Verifiable AI Hackathon in June 2025, further engaging the developer community. cheqd's focus on verifiable AI and credential ecosystems positions it in rapidly developing fields, addressing critical needs for digital identity, data management, and privacy across diverse use cases like gaming, healthcare, DeFi, and supply chain.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 19,
+                rank: 19,
+                name: "Exania AI",
+                country: "UK",
+                theme: "AI & Security",
+                innovation: "AI system integrating neural networks, quantum computing, and blockchain.",
+                growth: "200TB training data processed; 99.999% system uptime.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Exania AI"}</h3>
+                                <p class="text-slate-500">${"UK"} • Rank #${19}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"200TB training data processed; 99.999% system uptime."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Exania AI, developed by Exohood Labs Limited, is an advanced artificial intelligence system that integrates neural networks, quantum computing, and blockchain technology. Its core innovation lies in providing unprecedented computational capabilities, particularly through its "Exania Orbe" model, which offers offline operation and a blockchain-validated database for data integrity and confidentiality. This makes it suitable for highly secure environments with limited internet connectivity.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Exania AI has processed a substantial 200 terabytes (TB) of training data and boasts a high system uptime of 99.999%. It is currently serving leading research institutions and enterprises exclusively in the United Kingdom and Canada, with contributions to research initiatives with major space agencies. The company's focus on high-impact fields such as Space Exploration (mission planning, data analysis), Climate Science (environmental modeling), and Medical Science (drug discovery, genetic analysis) positions it for significant growth. The unique combination of blockchain security and offline capability provides a distinct advantage for clients requiring high security and operational independence. Exania AI's diverse model portfolio, including models for emotional intelligence (Exania ConnectEQ), social media analysis (Exania Analytics), and creative AI (Ginette), allows it to target various market segments.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 20,
+                rank: 20,
+                name: "ToffeeX",
+                country: "UK",
+                theme: "Digital Transformation",
+                innovation: "Physics-driven generative design software for component optimization.",
+                growth: "Trusted by Airbus, Rolls-Royce, GE; accelerates design cycles.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"ToffeeX"}</h3>
+                                <p class="text-slate-500">${"UK"} • Rank #${20}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Trusted by Airbus, Rolls-Royce, GE; accelerates design cycles."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">ToffeeX specializes in physics-driven generative design software that creates high-performance designs through advanced algorithms and computational fluid dynamics (CFD). Their cloud-native software optimizes components faster, better, and greener, enabling improvements such as increased heat transfer, reduced pumping losses, and lighter parts. The technology is capable of producing novel geometries that break "previous design habits" and can be optimized for various manufacturing processes including 3D printing, milling, and chemical etching.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">ToffeeX is trusted by major global companies across diverse industries, including Airbus, Lam Research, Rolls-Royce, Ricoh, EOS, GE, and Toyota. Client testimonials highlight its ability to accelerate design cycles (e.g., from concept to manufacturing in weeks for Ricoh) and deliver innovative cold plate designs. The software's versatility in optimizing designs for different manufacturing technologies without requiring changes to existing processes makes it highly appealing across a wide range of industries. Its cloud-native deployment offers flexibility and accessibility, a significant advantage over traditional on-premise solutions. ToffeeX addresses the critical need for faster, more efficient, and more sustainable product development, positioning it for substantial growth in the engineering and manufacturing sectors.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 21,
+                rank: 21,
+                name: "SimConverse",
+                country: "Australia",
+                theme: "Digital Transformation",
+                innovation: "AI Simulation platform for healthcare communication skills training.",
+                growth: "Deployed across NHS England; 700% increase in professional experience hours.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"SimConverse"}</h3>
+                                <p class="text-slate-500">${"Australia"} • Rank #${21}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Deployed across NHS England; 700% increase in professional experience hours."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">SimConverse's core innovation is an AI Simulation platform designed for communication skills training in healthcare. Driven by pedagogical principles like Bloom's Taxonomy and Scaffold Learning Theory, it offers high-fidelity, endlessly customizable, and secure simulations. The platform's sophisticated AI simulates realistic patient conversations, providing instant, personalized feedback to learners based on rubrics, and refining insights as they progress.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">SimConverse has demonstrated significant traction within the healthcare education sector. It achieved a 700% increase in professional experience hours for pharmacist students at Aston University (UK) and is deployed at workforce-scale across healthcare enterprises in Asia-Pacific, the UK, and North America. Most notably, it is deployed across NHS England as the only dedicated communication training platform available to NHS staff. The company has raised $3.75 million from top Venture Capital Investors. Testimonials highlight its realism, lack of glitches, and granular feedback, with the Queensland Government reporting a 3x boost in clinical confidence for nursing students. SimConverse aims to democratize access to high-quality healthcare education, supporting all disciplines and stages (undergraduate, graduate, CPD/CPE, compliance) with a diverse content library, positioning it for widespread global adoption and a significant impact on reducing medical errors.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 22,
+                rank: 22,
+                name: "Relume",
+                country: "Australia",
+                theme: "Digital Transformation",
+                innovation: "AI platform to accelerate website design and building.",
+                growth: "Trusted by 700,000+ designers/developers; 500,000+ websites built.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Relume"}</h3>
+                                <p class="text-slate-500">${"Australia"} • Rank #${22}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Trusted by 700,000+ designers/developers; 500,000+ websites built."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Relume's core innovation is an AI-powered platform that accelerates website design and building. It acts as a "design ally" by instantly generating Sitemaps, Wireframes, and Style Guides for marketing websites in minutes. This streamlines the initial, often time-consuming, conceptualization and structuring phases of web design, empowering users to "build Faster, Design Better in Webflow, Figma & React".</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Relume has gained significant traction, being trusted by over 700,000 designers and developers, and has facilitated the building of over 500,000 websites. Recent product updates in July and June 2025 introduced new features like Design View, Smarter Style Guide Generation, Icon Swapping, and Figma Sites Compatibility, indicating continuous innovation. Testimonials from users, including Webflow's co-founder, describe it as "groundbreaking" and making them "10x more productive". The company estimates its plans cost less than 1% of an average Webflow project while saving half the delivery time, making it a highly cost-effective solution. Its seamless integration with popular tools like Figma, Webflow, and React, coupled with extensive component libraries, positions Relume for continued strong growth in the web design and development ecosystem.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 23,
+                rank: 23,
+                name: "Servicely",
+                country: "Australia",
+                theme: "AI & Automation",
+                innovation: "Agentic AI-Powered Service Management platform for unified workflows.",
+                growth: "8% increase in productivity; 70% reduction in TCO for clients.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Servicely"}</h3>
+                                <p class="text-slate-500">${"Australia"} • Rank #${23}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"8% increase in productivity; 70% reduction in TCO for clients."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Servicely's core innovation is an Agentic AI-Powered Service Management platform designed to streamline workflows and transform service delivery across an enterprise. It unifies service management into a single platform, eliminating data silos and automating repetitive tasks. The platform activates native Generative AI to empower self-service, accelerate response times, and provide a reliable copilot for service teams. Its no-code/low-code approach offers unmatched flexibility, enabling businesses to create organization-wide solutions with ITIL-aligned pre-configuration.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Servicely has demonstrated significant traction with a growing customer base including Ampath Laboratories, Certis, Synthon, and Access4. The platform reports delivering quantifiable outcomes: an 8% increase in productivity for service teams, automation of up to 10% of manual tasks with AI, and a remarkable 70% reduction in the Total Cost of Ownership (TCO) of service management platforms for clients. Customer testimonials highlight benefits such as a 92% reduction in IT service billing preparation times, 50% reduction in incident resolution times, and significant cost reductions for telecommunications providers. Servicely's broad solution portfolio, covering Enterprise Service Management (ESM), IT Service Management (ITSM), HR Service Delivery, and more, positions it for substantial growth by addressing diverse needs across various business functions. Its focus on affordability and a proven implementation process further enhances its market appeal.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 24,
+                rank: 24,
+                name: "Upollo",
+                country: "Australia",
+                theme: "AI & Automation",
+                innovation: "AI platform to predict user conversion, churn, and expansion.",
+                growth: "Analyzes 1B+ data points daily; customers report up to $5.7M Net New ARR.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"Upollo"}</h3>
+                                <p class="text-slate-500">${"Australia"} • Rank #${24}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"Analyzes 1B+ data points daily; customers report up to $5.7M Net New ARR."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">Upollo is an AI platform designed to help businesses understand which users are likely to convert, churn, or expand, and why. Its core innovation lies in providing AI-powered scoring and actionable insights without requiring complex engineering or configuration. It leverages product, behavior, and CRM signals to accelerate Net Dollar Retention (NDR) growth and increase Annual Recurring Revenue (ARR). Key features include a "Magic Summary" and a "360° Customer View" for comprehensive user understanding.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">Upollo analyzes over 1 billion data points daily from businesses and users globally. Its customers have reported significant revenue gains, with up to $5.7 million in Net New ARR added in a year and tens of millions in new pipeline. Upollo claims a remarkable typical ROI of 100x, with a guaranteed minimum of 2x return on investment. A specific success story highlights helping OddsJam convert thousands of users and achieve +57% ARR growth. The platform addresses critical business challenges by enabling faster account expansion, preventing churn with predictive scores, and optimizing conversion rates for free and trial users. Upollo's seamless integration with existing tech stacks (Segment, Stripe, HubSpot, Salesforce) and its SOC 2 Type 2 and GDPR compliance further enhance its market appeal and growth potential in the customer intelligence and growth analytics sector.</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 25,
+                rank: 25,
+                name: "LUMOS Intelligence",
+                country: "Australia",
+                theme: "Digital Transformation",
+                innovation: "Unified customer intelligence platform for real-world audience understanding.",
+                growth: "100B+ consumer behavior records; 90% faster media planning.",
+                profile: `
+                    <div class="border-t border-slate-200 pt-4 mt-4">
+                        <div class="flex flex-col md:flex-row justify-between md:items-center pb-4 mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-slate-800">${"LUMOS Intelligence"}</h3>
+                                <p class="text-slate-500">${"Australia"} • Rank #${25}</p>
+                            </div>
+                            <div class="mt-3 md:mt-0 text-left md:text-right">
+                                <span class="text-sm font-semibold text-slate-700">Key Growth Indicator:</span>
+                                <p class="text-sm text-slate-500">${"100B+ consumer behavior records; 90% faster media planning."}</p>
+                            </div>
+                        </div>
+                        <div class="prose max-w-none prose-slate">
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Core Innovation</h4>
+                            <p class="text-slate-600 mb-4">LUMOS Intelligence is positioned as the "world's first unified customer intelligence platform." Its core innovation lies in understanding and engaging real-world audiences by providing groundbreaking marketing insights. The platform unlocks foot traffic insights, understands audiences across 6,500+ segments, allows exploration of outdoor media in an immersive urban digital twin, and attributes cross-channel marketing activations.</p>
+                            <h4 class="text-lg font-semibold mb-2 text-slate-800">Growth Trajectory & Market Impact</h4>
+                            <p class="text-slate-600">LUMOS Intelligence has gained significant traction, being featured by notable organizations such as the Outdoor Media Association, IAB Australia, Forbes Australia, and Startmate by Blackbird VC. The platform boasts impressive metrics: processing over 100 billion consumer behavior records and managing over 18 million unified, attributable audience profiles, leading to a reported 90% faster media planning and reporting efficiency. Recent market expansions include an official launch in Southeast Asia in October 2024, partnering with Brandavision and Viu, and a partnership with Doohly in June 2024 to leverage AI in Out-Of-Home (OOH) advertising. LUMOS also secured an oversubscribed $800,000 pre-seed funding round in September 2022. Its ability to democratize audience intelligence for media agencies, media owners, and brand marketers, coupled with its IoT-enabled mobile DOOH network, positions it for substantial growth in the evolving advertising and customer intelligence landscape.</p>
+                        </div>
+                    </div>
+                `
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const startupList = document.getElementById('startup-list');
+            const startupCount = document.getElementById('startup-count');
+            const themeFiltersContainer = document.getElementById('theme-filters');
+            // const sortSelect = document.getElementById('sort-select'); // Removed
+
+            let currentFilters = {
+                theme: 'All',
+                sort: 'rank' // Default to rank as it's the only sort now
+            };
+            let activeCardElement = null;
+
+            function getUniqueThemes() {
+                const themes = new Set(startupsData.map(s => s.theme));
+                return ['All', ...Array.from(themes).sort()];
+            }
+
+            function createThemeFilters() {
+                const themes = getUniqueThemes();
+                themeFiltersContainer.innerHTML = themes.map(theme => `
+                    <button class="theme-filter-btn px-3 py-1.5 text-sm font-medium rounded-full transition ${theme === 'All' ? 'active-filter' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}" data-theme="${theme}">
+                        ${theme}
+                    </button>
+                `).join('');
+            }
+
+            function renderStartupList() {
+                let filteredData = [...startupsData];
+
+                if (currentFilters.theme !== 'All') {
+                    filteredData = filteredData.filter(s => s.theme === currentFilters.theme);
+                }
+
+                // Always sort by rank now that other sort options are removed
+                filteredData.sort((a, b) => a.rank - b.rank);
+
+                startupList.innerHTML = filteredData.map(startup => `
+                    <div class="startup-card cursor-pointer p-4 bg-white rounded-lg border border-slate-200" data-id="${startup.id}">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-blue-900">${startup.name}</p>
+                                <p class="text-xs text-slate-500 mt-1">${startup.innovation}</p>
+                            </div>
+                            <div class="ml-4 text-center flex-shrink-0">
+                                <p class="text-xl font-bold text-slate-700">${startup.rank}</p>
+                                <p class="text-xs text-slate-500">${startup.country}</p>
+                            </div>
+                        </div>
+                        <div class="startup-details-content detail-view-enter">
+                            ${startup.profile}
+                        </div>
+                    </div>
+                `).join('');
+
+                startupCount.textContent = `${filteredData.length} Startups`;
+
+                if (activeCardElement) {
+                    const reRenderedCard = startupList.querySelector(`.startup-card[data-id='${activeCardElement.dataset.id}']`);
+                    if (reRenderedCard) {
+                        reRenderedCard.classList.add('bg-blue-50', 'border-blue-800');
+                        reRenderedCard.querySelector('.startup-details-content').classList.add('open');
+                        activeCardElement = reRenderedCard;
+                    } else {
+                        activeCardElement = null;
+                    }
+                }
+            }
+
+            function toggleStartupDetail(clickedCard) {
+                const detailsContent = clickedCard.querySelector('.startup-details-content');
+                const startupId = clickedCard.dataset.id;
+
+                if (activeCardElement && activeCardElement !== clickedCard) {
+                    activeCardElement.classList.remove('bg-blue-50', 'border-blue-800');
+                    activeCardElement.querySelector('.startup-details-content').classList.remove('open');
+                }
+
+                if (detailsContent.classList.contains('open')) {
+                    detailsContent.classList.remove('open');
+                    clickedCard.classList.remove('bg-blue-50', 'border-blue-800');
+                    activeCardElement = null;
+                } else {
+                    detailsContent.classList.add('open');
+                    clickedCard.classList.add('bg-blue-50', 'border-blue-800');
+                    activeCardElement = clickedCard;
+                }
+            }
+
+            function updateThemeFilterButtons() {
+                document.querySelectorAll('.theme-filter-btn').forEach(button => {
+                    if (button.dataset.theme === currentFilters.theme) {
+                        button.classList.add('active-filter');
+                        button.classList.remove('bg-white', 'text-slate-600', 'hover:bg-slate-100', 'border', 'border-slate-200');
+                    } else {
+                        button.classList.remove('active-filter');
+                        button.classList.add('bg-white', 'text-slate-600', 'hover:bg-slate-100', 'border', 'border-slate-200');
+                    }
+                });
+            }
+
+            startupList.addEventListener('click', (e) => {
+                const card = e.target.closest('.startup-card');
+                if (card) {
+                    toggleStartupDetail(card);
+                }
+            });
+
+            themeFiltersContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('.theme-filter-btn');
+                if (button) {
+                    currentFilters.theme = button.dataset.theme;
+                    updateThemeFilterButtons();
+                    renderStartupList();
+                }
+            });
+
+            // sortSelect.addEventListener('change', (e) => { // Removed
+            //     currentFilters.sort = e.target.value; // Removed
+            //     renderStartupList(); // Removed
+            // });
+
+            function renderCharts() {
+                const countryCounts = startupsData.reduce((acc, s) => {
+                    acc[s.country] = (acc[s.country] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const themeCounts = startupsData.reduce((acc, s) => {
+                    acc[s.theme] = (acc[s.theme] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const countryCtx = document.getElementById('country-chart').getContext('2d');
+                new Chart(countryCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(countryCounts),
+                        datasets: [{
+                            data: Object.values(countryCounts),
+                            backgroundColor: ['#3B82F6', '#10B981', '#F59E0B'],
+                            borderColor: '#FDFBF7',
+                            borderWidth: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: { family: 'Inter' }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const themeCtx = document.getElementById('theme-chart').getContext('2d');
+                new Chart(themeCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(themeCounts),
+                        datasets: [{
+                            label: 'Number of Startups',
+                            data: Object.values(themeCounts),
+                            backgroundColor: '#60A5FA',
+                            borderColor: '#3B82F6',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return ` ${context.raw} startups`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: {
+                                    display: false
+                                }
+                            },
+                             y: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            createThemeFilters();
+            renderStartupList();
+            renderCharts();
+        });
+    </script>
+</body>
+</html>
